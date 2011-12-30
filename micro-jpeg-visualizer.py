@@ -30,6 +30,13 @@ def UnZigZag( l ):
 	for i in range(64):
 		o[zigzag[i]]=l[i]
 	return o
+
+def DecodeNumber(code, bits):
+	l = 2**(code-1)
+	if bits>=l:
+		return bits
+	else:
+		return bits-(2*l-1)
 	
 def PrintMatrix( m):
 	for j in range(8):
@@ -43,9 +50,15 @@ def DrawMatrix(x, y, mat):
 	for yy in range(8):
 		for xx in range(8):
 			#print mat[j]
-			c = "%02x" % (mat[j]+128)
+			col = mat[j] + 128
+			if col>255:
+				col =255
+			if col<0:
+				col = 0
+
+			c = "%02x" % col
 			j+=1
-			w.create_rectangle((x*8+xx)*3, (y*8+yy)*3, (x*8+(xx+1))*3, (y*8+(yy+1))*3, fill="#"+c+c+c)
+			w.create_rectangle((x*8+xx)*2, (y*8+yy)*2, (x*8+(xx+1))*2, (y*8+(yy+1))*2, fill="#"+c+c+c)
 
 def RemoveFF00(data):
 	datapro = []
@@ -84,10 +97,12 @@ class IDCT:
 				nn = an*math.cos( n* math.pi * (x +.5)/8.0 )
 				mm = am*math.cos( m* math.pi * (y +.5)/8.0 )
 				#mat.append( mm*nn)	
+				
 				if x==n and y==m:
 					mat.append(1)
 				else:
 					mat.append(0)		
+				
 		for i in range(len(mat)):
 			self.base[i] += mat[i]*coeff
 
@@ -120,7 +135,7 @@ class Stream:
 		return "1"
 
 
-# Crate huffman bits from table lengths
+# Create huffman bits from table lengths
 class HuffmanTable:
 	def __init__(self):
 		self.caca=[]
@@ -149,39 +164,20 @@ class HuffmanTable:
 				return self.elements[i]
 		return -1
 
-	def GetValue(self, st):
+	def GetCode(self, st):
 		val=""
 		while(True):
-			val +=   st.GetBitStr()
-			
+			val +=   st.GetBitStr()			
 			res = self.Find(val)
 			if res == 0:
 				return 0
 			elif ( res != -1):
-				print val,
 				return res
 
-	def DecodeNumber(self, code, bits):
-		print "(%i,%i)" % (code,bits),
-
-		l = 2**(code-1)
-		if bits>=l:
-			return bits
-		else:
-			return bits-(2*l-1)
-
-	def GetDC(self, st):
-		code = self.GetValue(st)
+	def GetCoeff(self,st):
+		code = self.GetCode(st)
 		bits = st.GetBitN(code)
-		
-		if (bits==0):
-			return 0
-		return self.DecodeNumber(code, bits)
-
-	def GetAC(self,st):
-		code = self.GetValue(st)
-		bits = st.GetBitN(code)
-		return self.DecodeNumber(code, bits)
+		return DecodeNumber(code, bits)
 
 # main class that decodes the jpeg
 class jpeg:
@@ -189,6 +185,8 @@ class jpeg:
 		self.lumi_quant = []
 		self.crom_quant = []
 		self.tables = {}
+		self.width = 0
+		self.height = 0
 
 	def App0Segment(self, data):
 		#print len(data)
@@ -207,22 +205,20 @@ class jpeg:
 
 	def BuildMatrix(self, st, idx, quant, olddccoeff):	
 		i = IDCT()	
-		print "dc", 
-		dccoeff = self.tables[0+idx].GetDC(st) * quant[0] + olddccoeff
-		print dccoeff
-		if dccoeff!=0:
-			print "ac",
-			i.AddZigZag(0,dccoeff)
-			for l in range(1,64):
-				coeff = self.tables[16+idx].GetAC(st) #* quant[l]
-				print  coeff
-				if coeff==0:
-					break
-				i.AddZigZag(l,coeff)
-		print
-		print
-		PrintMatrix( i.base)
-		print "#"
+		dccoeff = self.tables[0+idx].GetCoeff(st) * quant[0] + olddccoeff
+		i.AddZigZag(0,dccoeff)
+		l = 1
+		while(l<64):
+			code = self.tables[16+idx].GetCode(st) 
+			if code == 0:
+				break
+			elif code >11:
+				l+= (code>>4)
+				code = code & 0xf
+			bits = st.GetBitN( code )						
+			coeff  =  DecodeNumber(code, bits) * quant[l]
+			i.AddZigZag(l,coeff)
+			l+=1
 		return i,dccoeff
 	
 	def ScanData(self, data):
@@ -237,12 +233,14 @@ class jpeg:
 		oldlumdccoeff = 0
 		oldCbdccoeff = 0
 		oldCrdccoeff = 0
-		for i in range(1):
-			matL,olddccoeff = self.BuildMatrix(st,0, self.lumi_quant, oldlumdccoeff)
-			matCb,oldCbdccoeff = self.BuildMatrix(st,1,self.crom_quant, oldCbdccoeff)
-			matCr, oldCrdccoeff = self.BuildMatrix(st,1,self.crom_quant, oldCrdccoeff)
-	 		#PrintMatrix( matL.base)
-			#DrawMatrix(i, 0, matL.base)		
+		for y in range(self.height/8):
+			for x in range(self.width/8):
+				matL,olddccoeff = self.BuildMatrix(st,0, self.lumi_quant, oldlumdccoeff)
+				matCb,oldCbdccoeff = self.BuildMatrix(st,1,self.crom_quant, oldCbdccoeff)
+				matCr, oldCrdccoeff = self.BuildMatrix(st,1,self.crom_quant, oldCrdccoeff)
+		 		PrintMatrix( matL.base)
+				print
+				DrawMatrix(x, y, matL.base)		
 
 	def DefineQuantizationTables(self, data):
 		hdr, = unpack("B",data[0:1])
@@ -252,21 +250,18 @@ class jpeg:
 		hdr, = unpack("B",data[64:65])
 		print hdr >>4, hdr & 0xf
 		self.crom_quant =  GetArray("B", data[66:2+128],64) 
-		PrintMatrix( UnZigZag(self.lumi_quant) )
-		print
-		PrintMatrix( UnZigZag(self.crom_quant) )
 
 	def BaselineDCT(self, data):
-		return
-	
+		hexdump( data )
+		hdr, self.height, self.width = unpack(">BHH",data[0:5])
+		print "size %ix%i" % (self.width,  self.height)
+		
 	def DefineHuffmanTables(self, data):
 		off = 0
 		for i in range(4):	
 			hdr, = unpack("B",data[off:off+1])
 			off+=1
 
-			#print "hdr", hdr
-		
 			lengths = GetArray("B", data[off:off+16],16) 
 			elements = []
 			off += 16
@@ -280,6 +275,7 @@ class jpeg:
 			#print lengths
 			#print elements
 			self.tables[hdr] = hf
+		print self.tables
 
 
 	def StartOfScan(self, data):
@@ -316,7 +312,7 @@ class jpeg:
 					self.StartOfScan(data)
 					self.ScanData(data[lenchunk:])
 				else:							
-					break
+					print "chunk unknown: %x" % hdr
 	
 			data = data[lenchunk:]
 			if len(data)==0:
@@ -324,12 +320,10 @@ class jpeg:
 				break		
 
 
-"""
 from Tkinter import *
 master = Tk()
-w = Canvas(master, width=200, height=100)
+w = Canvas(master, width=1600, height=600)
 w.pack()
-"""
 
 j = jpeg()
 #j.decode(open('images/huff_simple0.jpg', 'r').read())
@@ -339,6 +333,4 @@ j.decode(open('images/surfer.jpg', 'r').read())
 #j.decode(open('images/huff_simple0.jpg', 'r').read())
 #j.decode(open('images/surfer.jpg', 'r').read())
 #j.decode(open('images/parrots.jpg', 'r').read())
-"""
 #mainloop()
-"""
