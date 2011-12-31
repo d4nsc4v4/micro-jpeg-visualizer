@@ -115,51 +115,47 @@ class Stream:
 			val = val*2 + self.GetBit()
 		return val
 
-	def GetBitStr(self):
-		return "0" if  self.GetBit()==0 else "1"
-
 # Create huffman bits from table lengths
 class HuffmanTable:
 	def __init__(self):
-		self.caca=[]
-		self.bits = []
+		self.root=[]
 		self.elements = []
 	
-	def BitsFromLengths(self, lengths, side, depth):
-		if depth <16:		        
-			#print self.caca[depth], lengths[depth] 	        
-			if self.caca[depth]== lengths[depth]:
-				self.BitsFromLengths(lengths, side+"0", depth+1)
-				self.BitsFromLengths(lengths, side+"1", depth+1)
-			else:
-				self.caca[depth] +=1
-				self.bits.append(side)
+	def BitsFromLengths(self, root, element, pos):
+		if isinstance(root,list):
+			if pos==0:
+				if len(root)<2:
+					root.append(element)
+					return True				
+				return False
+			for i in [0,1]:
+				if len(root) == i:
+					root.append([])
+				if self.BitsFromLengths(root[i], element, pos-1) == True:
+					return True
+		return False
 	
 	def GetHuffmanBits(self,  lengths, elements):
-		self.caca = [0] * 16
-		self.bits = []
 		self.elements = elements
-		self.BitsFromLengths(lengths, "0", 0)
-		self.BitsFromLengths(lengths, "1", 0)
+		ii = 0
+		for i in range(len(lengths)):
+			for j in range(lengths[i]):
+				self.BitsFromLengths(self.root, elements[ii], i)
+				ii+=1
 
-	def Find(self,val):
-		for i in range(len(self.bits)):
-			if self.bits[i]==val:
-				return self.elements[i]
-		return -1
+	def Find(self,st):
+		r = self.root
+		while isinstance(r, list):
+			r=r[st.GetBit()]
+		return  r 
 
 	def GetCode(self, st):
-		val=""
 		while(True):
-			val += st.GetBitStr()			
-			res = self.Find(val)
+			res = self.Find(st)
 			if res == 0:
 				return 0
 			elif ( res != -1):
-				print " ->", val,
 				return res
-
-
 
 # main class that decodes the jpeg
 class jpeg:
@@ -171,19 +167,11 @@ class jpeg:
 		self.height = 0
 
 	def BuildMatrix(self, st, idx, quant, olddccoeff):	
-
-		#print self.tables[0+idx].elements
-		#print self.tables[0+idx].bits
-		#print self.tables[16+idx].elements
-		#print self.tables[16+idx].bits
-
 		i = IDCT()	
-		print "idx", idx
 		code = self.tables[0+idx].GetCode(st)
 		bits = st.GetBitN(code)
 		dccoeff = DecodeNumber(code, bits)  + olddccoeff
 
-		print "(%i %i %i)" % ( code, bits, dccoeff)
 		i.AddZigZag(0,(dccoeff) * quant[0])
 		l = 1
 		while(l<64):
@@ -200,8 +188,6 @@ class jpeg:
 				coeff  =  DecodeNumber(code, bits) 
 				i.AddZigZag(l,coeff * quant[l])
 				l+=1
-			print "(%i %i %i)" % ( code, bits, coeff)
-		print
 		return i,dccoeff
 	
 	def StartOfScan(self, data, hdrlen):
@@ -214,20 +200,19 @@ class jpeg:
 		oldCrdccoeff = 0
 		for y in range(self.height/8):
 			for x in range(self.width/8):
-				print "MCU:", x,y
+				#print "MCU:", x,y
 				matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
 				matCr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
 				matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
 				DrawMatrix(x, y, matL.base, matCb.base, matCr.base )	
-				PrintMatrix(matL.base)
+				#PrintMatrix(matL.base)
 		
 		return lenchunk +hdrlen
 
 	def DefineQuantizationTables(self, data):
 		while(len(data)>0):
-			print len(data)
 			hdr, = unpack("B",data[0:1])
-			print hdr >>4, hdr & 0xf
+			#print hdr >>4, hdr & 0xf
 			self.quant[hdr & 0xf] =  GetArray("B", data[1:1+64],64)
 			#PrintMatrix(self.quant[hdr >>4])
 			data = data[65:]
@@ -254,19 +239,11 @@ class jpeg:
 			for i in lengths:
 				elements+= (GetArray("B", data[off:off+i], i))
 				off = off+i 
-			print lengths
-			print elements
-			print
 
 			hf = HuffmanTable();
 			hf.GetHuffmanBits( lengths, elements)
 			self.tables[hdr] = hf
 
-			#print hf.bits
-			"""
-			hf = HuffmanTable2();
-			hf.GetHuffmanBits( lengths, elements)
-			"""
 			data = data[off:]
 
 	def decode(self, data):	
@@ -304,10 +281,10 @@ w.pack()
 j = jpeg()
 #j.decode(open('images/huff_simple0.jpg', 'r').read())
 #j.decode(open('images/surfer.jpg', 'r').read())
-#j.decode(open('images/porsche.jpg', 'r').read())
+j.decode(open('images/porsche.jpg', 'r').read())
 #j.decode(open('images/test.jpeg', 'r').read())
 #j.decode(open('images/huff_simple0.jpg', 'r').read())
-j.decode(open('images/surfer.jpg', 'r').read())
+#j.decode(open('images/surfer.jpg', 'r').read())
 #j.decode(open('images/download.jpg', 'r').read())
 #j.decode(open('images/parrots.jpg', 'r').read())
 mainloop()
