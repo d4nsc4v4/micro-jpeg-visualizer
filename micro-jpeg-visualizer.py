@@ -195,9 +195,7 @@ class jpeg:
 
 		st = Stream(data)
 
-		oldlumdccoeff = 0
-		oldCbdccoeff = 0
-		oldCrdccoeff = 0
+		oldlumdccoeff, oldCbdccoeff, oldCrdccoeff = 0, 0, 0
 		for y in range(self.height/8):
 			for x in range(self.width/8):
 				#print "MCU:", x,y
@@ -282,9 +280,4 @@ j = jpeg()
 #j.decode(open('images/huff_simple0.jpg', 'r').read())
 #j.decode(open('images/surfer.jpg', 'r').read())
 j.decode(open('images/porsche.jpg', 'r').read())
-#j.decode(open('images/test.jpeg', 'r').read())
-#j.decode(open('images/huff_simple0.jpg', 'r').read())
-#j.decode(open('images/surfer.jpg', 'r').read())
-#j.decode(open('images/download.jpg', 'r').read())
-#j.decode(open('images/parrots.jpg', 'r').read())
 mainloop()
