@@ -122,7 +122,7 @@ class HuffmanTable:
 		self.lengths = lengths
 		self.elements = elements
 	
-	def Find(self,st):
+	def GetCode(self,st):
 		val = off = ini = 0
 		
 		for i in range(0, 16):
@@ -134,14 +134,6 @@ class HuffmanTable:
 				off += self.lengths[i]
 			ini *= 2
 		return  -1
-		
-	def GetCode(self, st):
-		while(True):
-			res = self.Find(st)
-			if res == 0:
-				return 0
-			elif ( res != -1):
-				return res
 
 # main class that decodes the jpeg
 class jpeg:
