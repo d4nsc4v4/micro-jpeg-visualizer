@@ -117,38 +117,24 @@ class Stream:
 
 # Create huffman bits from table lengths
 class HuffmanTable:
-	def __init__(self):
+	def __init__(self, lengths, elements):
 		self.root=[]
-		self.elements = []
-	
-	def BitsFromLengths(self, root, element, pos):
-		if isinstance(root,list):
-			if pos==0:
-				if len(root)<2:
-					root.append(element)
-					return True				
-				return False
-			for i in [0,1]:
-				if len(root) == i:
-					root.append([])
-				if self.BitsFromLengths(root[i], element, pos-1) == True:
-					return True
-		return False
-	
-	def GetHuffmanBits(self,  lengths, elements):
+		self.lengths = lengths
 		self.elements = elements
-		ii = 0
-		for i in range(len(lengths)):
-			for j in range(lengths[i]):
-				self.BitsFromLengths(self.root, elements[ii], i)
-				ii+=1
-
+	
 	def Find(self,st):
-		r = self.root
-		while isinstance(r, list):
-			r=r[st.GetBit()]
-		return  r 
-
+		val = off = ini = 0
+		
+		for i in range(0, 16):
+			val = val*2 + st.GetBit()
+			if self.lengths[i]>0:
+				if (val-ini<self.lengths[i]):
+					return self.elements[off + val-ini]
+				ini = ini + self.lengths[i]
+				off += self.lengths[i]
+			ini *= 2
+		return  -1
+		
 	def GetCode(self, st):
 		while(True):
 			res = self.Find(st)
@@ -198,12 +184,10 @@ class jpeg:
 		oldlumdccoeff, oldCbdccoeff, oldCrdccoeff = 0, 0, 0
 		for y in range(self.height/8):
 			for x in range(self.width/8):
-				#print "MCU:", x,y
 				matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
 				matCr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
 				matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
 				DrawMatrix(x, y, matL.base, matCb.base, matCr.base )	
-				#PrintMatrix(matL.base)
 		
 		return lenchunk +hdrlen
 
@@ -228,7 +212,6 @@ class jpeg:
 			off = 0
 			hdr, = unpack("B",data[off:off+1])
 			off+=1
-			#print hdr	
 
 			lengths = GetArray("B", data[off:off+16],16) 
 			off += 16
@@ -238,9 +221,7 @@ class jpeg:
 				elements+= (GetArray("B", data[off:off+i], i))
 				off = off+i 
 
-			hf = HuffmanTable();
-			hf.GetHuffmanBits( lengths, elements)
-			self.tables[hdr] = hf
+			self.tables[hdr] = HuffmanTable(lengths, elements)
 
 			data = data[off:]
 
