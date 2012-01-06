@@ -1,5 +1,5 @@
 # Written by Raul Aguaviva as an exercise
-# beware not optimized for speed or clarity :-)
+# beware not optimized for speed :-)
 
 from struct import *
 import math 
@@ -118,7 +118,6 @@ class Stream:
 # Create huffman bits from table lengths
 class HuffmanTable:
 	def __init__(self, lengths, elements):
-		self.root=[]
 		self.lengths = lengths
 		self.elements = elements
 	
@@ -162,10 +161,9 @@ class jpeg:
 			
 			bits = st.GetBitN( code )
 
-			if l<64:						
-				coeff  =  DecodeNumber(code, bits) 
-				i.AddZigZag(l,coeff * quant[l])
-				l+=1
+			coeff  =  DecodeNumber(code, bits) 
+			i.AddZigZag(l,coeff * quant[l])
+			l+=1
 		return i,dccoeff
 	
 	def StartOfScan(self, data, hdrlen):
@@ -181,7 +179,7 @@ class jpeg:
 				matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
 				DrawMatrix(x, y, matL.base, matCb.base, matCr.base )	
 		
-		return lenchunk +hdrlen
+		return lenchunk + hdrlen
 
 	def DefineQuantizationTables(self, data):
 		while(len(data)>0):
@@ -223,7 +221,7 @@ class jpeg:
 			#print "%x" % hdr
 			if hdr == 0xffd8:
 				lenchunk = 2
-		        elif hdr == 0xffd9:
+			elif hdr == 0xffd9:
 				return
 			else:
 				lenchunk, = unpack(">H", data[2:4])
@@ -231,13 +229,13 @@ class jpeg:
 				lenchunk+=2
 				chunk = data[4:lenchunk]
 											
-			        if hdr == 0xffdb:
+				if hdr == 0xffdb:
 					self.DefineQuantizationTables(chunk)
-			        elif hdr == 0xffc0:
+				elif hdr == 0xffc0:
 					self.BaselineDCT(chunk)
-			        elif hdr == 0xffc4:
+				elif hdr == 0xffc4:
 					self.DefineHuffmanTables(chunk)
-			        elif hdr == 0xffda:
+				elif hdr == 0xffda:
 					lenchunk = self.StartOfScan(data, lenchunk)
 			
 			data = data[lenchunk:]
@@ -250,7 +248,7 @@ w = Canvas(master, width=1600, height=600)
 w.pack()
 
 j = jpeg()
-#j.decode(open('images/huff_simple0.jpg', 'r').read())
-#j.decode(open('images/surfer.jpg', 'r').read())
+#j.decode(open('images/huff_simple0.jpg', 'rb').read())
+#j.decode(open('images/surfer.jpg', 'rb').read())
 j.decode(open('images/porsche.jpg', 'rb').read())
 mainloop()
